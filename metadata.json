@@ -1,0 +1,5 @@
+{
+  "name": "Augmented Decision Support Interface",
+  "description": "An AI-powered dashboard for loan officers featuring risk scoring, SHAP-based explainability, interactive what-if scenarios, and borrower relationship network analysis.",
+  "requestFramePermissions": []
+}
