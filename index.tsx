@@ -41,6 +41,8 @@ const XIcon = ({ className }: { className?: string }) => (
 
 // --- Types ---
 
+type TabType = 'dashboard' | 'network' | 'simulator';
+
 interface BorrowerData {
   id: string;
   name: string;
@@ -54,9 +56,8 @@ interface BorrowerData {
 }
 
 interface RiskAnalysis {
-  score: number; // 0 - 100 (High Score = Low Risk for Credit Score, but here we use Risk Score: High Score = High Risk)
-  // Let's standardise: 0-100 Risk Score. 100 = Extremely High Risk. 0 = Safe.
-  rating: string; // "Low", "Medium", "High", "Critical"
+  score: number; // 0 - 100 
+  rating: string; 
   shapValues: { feature: string; impact: number; description: string }[];
   recommendations: { title: string; impact: string; type: "positive" | "negative" | "neutral" }[];
 }
@@ -121,11 +122,9 @@ const DEFAULT_GRAPH_LINKS: GraphLink[] = [
   { source: "B1", target: "A1", label: "Owns" },
 ];
 
-// --- Components ---
+// --- Leaf Components ---
 
 function RiskGauge({ score }: { score: number }) {
-  // Score 0-100.
-  // 0-20 Low (Green), 21-50 Medium (Yellow), 51-80 High (Orange), 81-100 Critical (Red)
   let color = "#22c55e";
   if (score > 20) color = "#eab308";
   if (score > 50) color = "#f97316";
@@ -134,20 +133,14 @@ function RiskGauge({ score }: { score: number }) {
   const radius = 80;
   const stroke = 12;
   const normalizedScore = Math.min(Math.max(score, 0), 100);
-  const circumference = normalizedScore * Math.PI * (radius/100); // semi-circle mapping
-
-  // SVG Path for semi-circle
-  // M startX startY A radius radius 0 0 1 endX endY
-  // We'll just use dasharray for the gauge fill
+  const circumference = normalizedScore * Math.PI * (radius/100); 
   const fullCircumference = Math.PI * radius;
   const strokeDashoffset = fullCircumference - (normalizedScore / 100) * fullCircumference;
 
   return (
     <div className="relative flex flex-col items-center justify-center p-4">
       <svg width="200" height="110" viewBox="0 0 200 110" className="overflow-visible">
-        {/* Background Track */}
         <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e2e8f0" strokeWidth={stroke} strokeLinecap="round" />
-        {/* Value Track */}
         <path
           d="M 20 100 A 80 80 0 0 1 180 100"
           fill="none"
@@ -176,7 +169,6 @@ function ShapChart({ values }: { values: { feature: string; impact: number; desc
             <span className="w-1/3 truncate text-slate-600 font-medium" title={v.feature}>{v.feature}</span>
             <div className="flex-1 flex items-center h-4 bg-slate-100 rounded-full relative mx-2 overflow-hidden">
                 <div className="absolute w-[1px] h-full bg-slate-300 left-1/2"></div>
-                {/* Bar */}
                 <div 
                   className={`h-full rounded-full transition-all duration-700 ${v.impact > 0 ? 'bg-red-500' : 'bg-green-500'}`}
                   style={{
@@ -187,7 +179,6 @@ function ShapChart({ values }: { values: { feature: string; impact: number; desc
             </div>
             <span className="w-12 text-right text-xs text-slate-500 font-mono">{v.impact > 0 ? '+' : ''}{v.impact}</span>
           </div>
-          {/* Tooltip */}
           <div className="absolute z-10 hidden group-hover:block bg-slate-800 text-white text-xs p-2 rounded shadow-lg -top-8 left-1/2 transform -translate-x-1/2 whitespace-nowrap">
             {v.description}
           </div>
@@ -206,14 +197,12 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
   const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
   const [isDragging, setIsDragging] = useState(false);
   const [lastMousePosition, setLastMousePosition] = useState({ x: 0, y: 0 });
-  
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const hasDraggedRef = useRef(false);
 
-  // Reset/Center view on mount
   useEffect(() => {
     handleReset();
-  }, []);
+  }, [nodes, links]); // Reset when data changes
 
   const handleWheel = (e: React.WheelEvent) => {
     const zoomSensitivity = 0.001;
@@ -222,13 +211,11 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
 
     if (svgRef.current) {
         const rect = svgRef.current.getBoundingClientRect();
-        // Mouse relative to SVG top-left
         const cursorX = e.clientX - rect.left;
         const cursorY = e.clientY - rect.top;
         const scaleRatio = newScale / transform.k;
         const newX = cursorX - (cursorX - transform.x) * scaleRatio;
         const newY = cursorY - (cursorY - transform.y) * scaleRatio;
-
         setTransform({ k: newScale, x: newX, y: newY });
     }
   };
@@ -236,7 +223,7 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault(); 
     setIsDragging(true);
-    hasDraggedRef.current = false; // Reset drag tracker
+    hasDraggedRef.current = false;
     setLastMousePosition({ x: e.clientX, y: e.clientY });
   };
 
@@ -244,12 +231,9 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
     if (!isDragging) return;
     const dx = e.clientX - lastMousePosition.x;
     const dy = e.clientY - lastMousePosition.y;
-    
-    // If moved more than small threshold, it's a drag, not a click
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
         hasDraggedRef.current = true;
     }
-
     setTransform(prev => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
     setLastMousePosition({ x: e.clientX, y: e.clientY });
   };
@@ -259,15 +243,11 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
   };
 
   const handleCanvasClick = () => {
-    // Only deselect if we didn't drag
-    if (!hasDraggedRef.current) {
-        setSelectedNode(null);
-    }
+    if (!hasDraggedRef.current) setSelectedNode(null);
   };
   
   const handleNodeClick = (e: React.MouseEvent, node: GraphNode) => {
       e.stopPropagation();
-      // If we dragged, don't select the node (user was panning)
       if (hasDraggedRef.current) return;
       setSelectedNode(node);
   };
@@ -275,17 +255,13 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
   const handleZoom = (direction: 'in' | 'out') => {
       const factor = direction === 'in' ? 1.2 : 0.8;
       const newScale = Math.min(Math.max(0.2, transform.k * factor), 5);
-      
-      // Zoom toward center of current view
       if (svgRef.current) {
          const rect = svgRef.current.getBoundingClientRect();
          const centerX = rect.width / 2;
          const centerY = rect.height / 2;
-         
          const scaleRatio = newScale / transform.k;
          const newX = centerX - (centerX - transform.x) * scaleRatio;
          const newY = centerY - (centerY - transform.y) * scaleRatio;
-         
          setTransform({ k: newScale, x: newX, y: newY });
       }
   };
@@ -293,7 +269,6 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
   const handleReset = () => {
      if (svgRef.current) {
          const rect = svgRef.current.getBoundingClientRect();
-         // Content logic size is roughly 400x300, center is 200,150
          const newX = (rect.width / 2) - 200;
          const newY = (rect.height / 2) - 150;
          setTransform({ k: 1, x: newX, y: newY });
@@ -302,8 +277,6 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
      }
   };
 
-
-  // --- Node Layout Calculation ---
   const width = 400;
   const height = 300;
   const centerX = width / 2;
@@ -355,7 +328,6 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
         </defs>
         
         <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}>
-             {/* Links */}
             {links.map((link, i) => {
             const source = layoutNodes.find(n => n.id === link.source);
             const target = layoutNodes.find(n => n.id === link.target);
@@ -383,18 +355,15 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
                 </g>
             );
             })}
-            {/* Nodes */}
             {layoutNodes.map((node, i) => (
             <g 
                 key={i} 
                 onClick={(e) => handleNodeClick(e, node)}
                 className="cursor-pointer transition-transform hover:scale-110"
             >
-                {/* Selection Ring */}
                 {selectedNode?.id === node.id && (
                      <circle cx={node.x} cy={node.y} r={(node.type === 'borrower' ? 25 : 18) + 4} fill="none" stroke="#60a5fa" strokeWidth="2" strokeOpacity="0.5" />
                 )}
-                
                 <circle
                     cx={node.x}
                     cy={node.y}
@@ -427,7 +396,6 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
         </g>
       </svg>
       
-      {/* Zoom Controls */}
       <div className="absolute bottom-4 right-4 flex flex-col gap-1 bg-white shadow-md rounded-lg border border-slate-200 p-1">
         <button onClick={() => handleZoom('in')} className="p-2 hover:bg-slate-100 text-slate-600 rounded" title="Zoom In">
             <ZoomInIcon className="w-4 h-4" />
@@ -445,7 +413,6 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
         Scroll to Zoom • Drag to Pan
       </div>
 
-      {/* Node Details Overlay */}
       {selectedNode && (
           <div className="absolute top-4 left-4 w-64 bg-white/95 backdrop-blur shadow-lg rounded-xl border border-slate-200 p-4 animate-in fade-in zoom-in-95 duration-200">
               <div className="flex justify-between items-start mb-2">
@@ -463,7 +430,6 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
                       <span className="text-slate-500">ID</span>
                       <span className="font-mono text-xs bg-slate-100 px-1 rounded text-slate-600">{selectedNode.id}</span>
                   </div>
-                  {/* Fake Context Data */}
                   <div className="pt-2 border-t border-slate-100 mt-2">
                       <p className="text-xs text-slate-500 leading-relaxed">
                           {selectedNode.type === 'borrower' && "Primary applicant. Risk assessment heavily weighted on this node's attributes."}
@@ -480,9 +446,385 @@ function NetworkGraph({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[]
   );
 }
 
+// --- Layout & Feature Components ---
+
+const Sidebar = ({ activeTab, onTabChange }: { activeTab: TabType, onTabChange: (tab: TabType) => void }) => {
+  const TabButton = ({ id, label, icon: Icon }: { id: TabType, label: string, icon: any }) => (
+    <button 
+      onClick={() => onTabChange(id)}
+      className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border transition-colors ${
+        activeTab === id 
+          ? 'bg-blue-600/10 text-blue-400 border-blue-600/20' 
+          : 'border-transparent hover:bg-slate-800'
+      }`}
+    >
+      <Icon className="w-5 h-5" />
+      <span className="font-medium">{label}</span>
+    </button>
+  );
+
+  return (
+    <aside className="w-64 bg-slate-900 text-slate-300 flex-shrink-0 hidden md:flex flex-col">
+      <div className="p-6 border-b border-slate-800">
+        <div className="flex items-center gap-2 text-blue-400 font-bold text-xl">
+          <BrainCircuitIcon className="w-8 h-8" />
+          <span>RiskAI</span>
+        </div>
+        <p className="text-xs text-slate-500 mt-1">Augmented Decision Engine</p>
+      </div>
+      
+      <nav className="flex-1 p-4 space-y-2">
+        <TabButton id="dashboard" label="Dashboard" icon={LayoutDashboardIcon} />
+        <TabButton id="network" label="Network Graph" icon={NetworkIcon} />
+        <TabButton id="simulator" label="Simulator" icon={CalculatorIcon} />
+      </nav>
+
+      <div className="p-6 border-t border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">JD</div>
+            <div className="text-sm">
+              <div className="text-white">John Doe</div>
+              <div className="text-xs">Loan Officer</div>
+            </div>
+          </div>
+      </div>
+    </aside>
+  );
+};
+
+const Header = ({ activeTab, borrowerId }: { activeTab: TabType, borrowerId: string }) => {
+  const titles = {
+    dashboard: 'Loan Application Assessment',
+    network: 'Entity Relationship Analysis',
+    simulator: 'What-If Scenario Simulator'
+  };
+
+  return (
+    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0">
+      <h1 className="text-xl font-bold text-slate-800">{titles[activeTab]}</h1>
+      <div className="flex items-center gap-4">
+        <span className="px-3 py-1 bg-slate-100 rounded-full text-xs font-medium text-slate-600">ID: {borrowerId}</span>
+        <span className="text-sm text-slate-500">{new Date().toLocaleDateString()}</span>
+      </div>
+    </header>
+  );
+};
+
+// --- Sub-Components for Views ---
+
+const ApplicantProfile = ({ borrower }: { borrower: BorrowerData }) => (
+  <div className="col-span-12 md:col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <h3 className="text-sm uppercase font-semibold text-slate-500 mb-4">Applicant Profile</h3>
+    <div className="space-y-3">
+      <div>
+        <label className="text-xs text-slate-400">Full Name</label>
+        <div className="font-medium text-lg">{borrower.name}</div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs text-slate-400">Credit Score</label>
+            <div className="font-medium text-slate-800">{borrower.creditScore}</div>
+          </div>
+          <div>
+            <label className="text-xs text-slate-400">Age</label>
+            <div className="font-medium text-slate-800">{borrower.age}</div>
+          </div>
+      </div>
+      <div>
+        <label className="text-xs text-slate-400">Employment</label>
+        <div className="font-medium text-slate-800 truncate">{borrower.employmentStatus}</div>
+      </div>
+    </div>
+  </div>
+);
+
+const RecommendationsCard = ({ recommendations }: { recommendations: RiskAnalysis['recommendations'] }) => (
+  <div className="col-span-12 md:col-span-5 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col">
+    <h3 className="text-sm uppercase font-semibold text-slate-500 mb-4 flex items-center gap-2">
+      <BrainCircuitIcon className="w-4 h-4" />
+      AI Recommendations
+    </h3>
+    <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+      {recommendations.map((rec, i) => (
+        <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-100 flex gap-3">
+          <div className="mt-1">
+              {rec.type === 'positive' ? <CheckCircleIcon className="w-4 h-4 text-green-500" /> : <AlertTriangleIcon className="w-4 h-4 text-amber-500" />}
+          </div>
+          <div>
+            <div className="text-sm font-medium text-slate-800">{rec.title}</div>
+            <div className="text-xs text-slate-500 mt-1">{rec.impact}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// --- Main Views ---
+
+const DashboardView = ({ 
+  borrower, 
+  analysis, 
+  formState, 
+  handleInputChange, 
+  runAnalysis, 
+  isAnalyzing, 
+  apiKeyMissing, 
+  graphNodes, 
+  graphLinks, 
+  onNavigate 
+}: any) => {
+  return (
+    <>
+      <div className="grid grid-cols-12 gap-6">
+        <ApplicantProfile borrower={borrower} />
+
+        {/* Risk Score */}
+        <div className="col-span-12 md:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center justify-center relative">
+          <h3 className="absolute top-6 left-6 text-sm uppercase font-semibold text-slate-500">Predicted Risk</h3>
+          <RiskGauge score={analysis.score} />
+          <div className={`mt-[-20px] px-3 py-1 rounded-full text-sm font-bold border ${
+            analysis.rating === 'Low' ? 'bg-green-50 text-green-700 border-green-200' :
+            analysis.rating === 'Medium' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+            'bg-red-50 text-red-700 border-red-200'
+          }`}>
+            {analysis.rating} Risk
+          </div>
+        </div>
+
+        <RecommendationsCard recommendations={analysis.recommendations} />
+      </div>
+
+      <div className="grid grid-cols-12 gap-6">
+        {/* SHAP */}
+        <div className="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+              <h3 className="text-sm uppercase font-semibold text-slate-500">Key Risk Drivers</h3>
+              <span className="text-[10px] bg-slate-100 px-2 py-1 rounded text-slate-500">Global SHAP</span>
+          </div>
+          <ShapChart values={analysis.shapValues} />
+        </div>
+
+        {/* Simulator Preview */}
+        <div className="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6 border-t-4 border-t-blue-500">
+          <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm uppercase font-semibold text-slate-500 flex items-center gap-2">
+                <CalculatorIcon className="w-4 h-4" />
+                Quick Simulator
+              </h3>
+              <button onClick={() => onNavigate('simulator')} className="text-xs text-blue-500 hover:underline">Full View &rarr;</button>
+          </div>
+          <div className="space-y-4">
+              <div>
+                <label className="flex justify-between text-xs font-medium text-slate-700 mb-1">
+                    <span>Loan Amount</span>
+                    <span>${formState.loanAmount.toLocaleString()}</span>
+                </label>
+                <input 
+                    type="range" name="loanAmount" min="5000" max="100000" step="1000" 
+                    value={formState.loanAmount} onChange={handleInputChange}
+                    className="w-full accent-blue-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" 
+                  />
+              </div>
+              <div className="text-xs text-center text-slate-400">Use Simulator tab for advanced controls</div>
+              <button 
+                onClick={runAnalysis}
+                disabled={isAnalyzing || apiKeyMissing}
+                className={`w-full py-2 mt-2 rounded-lg flex items-center justify-center gap-2 font-semibold text-sm transition-all
+                  ${isAnalyzing ? 'bg-slate-100 text-slate-400' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md'}
+                `}
+              >
+                {isAnalyzing ? "Analyzing..." : "Update Score"}
+              </button>
+          </div>
+        </div>
+
+        {/* Network Preview */}
+        <div className="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm uppercase font-semibold text-slate-500 flex items-center gap-2">
+                <NetworkIcon className="w-4 h-4" />
+                Network Preview
+              </h3>
+                <button onClick={() => onNavigate('network')} className="text-xs text-blue-500 hover:underline">Full View &rarr;</button>
+          </div>
+          <div className="flex-1 min-h-[200px] relative">
+              <NetworkGraph nodes={graphNodes} links={graphLinks} />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+const NetworkView = ({ nodes, links }: { nodes: GraphNode[], links: GraphLink[] }) => {
+  return (
+    <div className="h-full flex flex-col">
+       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex-1 flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <NetworkIcon className="w-5 h-5 text-blue-500" />
+                Borrower Relationship Graph
+              </h2>
+              <p className="text-sm text-slate-500">Analyzing 1st and 2nd degree connections for contagion risk.</p>
+            </div>
+            <div className="flex gap-2">
+              <span className="flex items-center gap-1 text-xs text-slate-500"><div className="w-2 h-2 rounded-full bg-blue-500"></div>Borrower</span>
+              <span className="flex items-center gap-1 text-xs text-slate-500"><div className="w-2 h-2 rounded-full bg-green-500"></div>Guarantor</span>
+              <span className="flex items-center gap-1 text-xs text-slate-500"><div className="w-2 h-2 rounded-full bg-indigo-500"></div>Employer</span>
+            </div>
+          </div>
+          <div className="flex-1 border border-slate-100 rounded-lg bg-slate-50 p-4">
+            <NetworkGraph nodes={nodes} links={links} />
+          </div>
+       </div>
+    </div>
+  );
+};
+
+const SimulatorView = ({ 
+  formState, 
+  handleInputChange, 
+  runAnalysis, 
+  isAnalyzing, 
+  apiKeyMissing, 
+  analysis 
+}: any) => {
+  return (
+     <div className="grid grid-cols-12 gap-6 h-full">
+        {/* Controls */}
+        <div className="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6 overflow-y-auto">
+            <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+              <CalculatorIcon className="w-5 h-5 text-blue-500" />
+              Scenario Controls
+            </h3>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="flex justify-between text-sm font-medium text-slate-700 mb-2">
+                    <span>Loan Amount</span>
+                    <span className="text-blue-600 font-bold">${formState.loanAmount.toLocaleString()}</span>
+                </label>
+                <input 
+                    type="range" name="loanAmount" min="5000" max="100000" step="1000" 
+                    value={formState.loanAmount} onChange={handleInputChange}
+                    className="w-full accent-blue-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" 
+                  />
+                <div className="flex justify-between text-xs text-slate-400 mt-1">
+                  <span>$5k</span>
+                  <span>$100k</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="flex justify-between text-sm font-medium text-slate-700 mb-2">
+                    <span>Annual Income</span>
+                    <span className="text-blue-600 font-bold">${formState.income.toLocaleString()}</span>
+                </label>
+                <input 
+                    type="range" name="income" min="20000" max="200000" step="5000" 
+                    value={formState.income} onChange={handleInputChange}
+                    className="w-full accent-blue-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" 
+                  />
+              </div>
+
+                <div>
+                <label className="flex justify-between text-sm font-medium text-slate-700 mb-2">
+                    <span>Credit Score</span>
+                    <span className="text-blue-600 font-bold">{formState.creditScore}</span>
+                </label>
+                <input 
+                    type="range" name="creditScore" min="300" max="850" step="10" 
+                    value={formState.creditScore} onChange={handleInputChange}
+                    className="w-full accent-blue-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" 
+                  />
+                <div className="flex justify-between text-xs text-slate-400 mt-1">
+                  <span>Poor (300)</span>
+                  <span>Excellent (850)</span>
+                </div>
+              </div>
+
+                <div className="space-y-4 pt-4 border-t border-slate-100">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Loan Term</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[12, 24, 36, 48, 60].map(term => (
+                        <button
+                          key={term}
+                          onClick={() => handleInputChange({ target: { name: 'loanTerm', value: term } } as any)}
+                          className={`px-3 py-2 text-sm rounded border ${
+                            formState.loanTerm === term 
+                            ? 'bg-blue-600 text-white border-blue-600' 
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          {term} Mo
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Employment</label>
+                    <input 
+                      type="text" 
+                      name="employmentStatus" 
+                      value={formState.employmentStatus}
+                      onChange={handleInputChange}
+                      className="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded text-slate-800 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={runAnalysis}
+                  disabled={isAnalyzing || apiKeyMissing}
+                  className={`w-full py-4 mt-4 rounded-xl flex items-center justify-center gap-2 font-bold text-lg transition-all shadow-lg
+                    ${isAnalyzing ? 'bg-slate-100 text-slate-400' : 'bg-blue-600 hover:bg-blue-700 text-white hover:scale-[1.02]'}
+                  `}
+                >
+                  {isAnalyzing ? (
+                    <><RefreshCwIcon className="w-5 h-5 animate-spin" /> Simulating...</>
+                  ) : (
+                    <><BrainCircuitIcon className="w-5 h-5" /> Run Simulation</>
+                  )}
+                </button>
+            </div>
+        </div>
+
+        {/* Results Preview */}
+        <div className="col-span-12 lg:col-span-8 space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+               <h3 className="text-sm uppercase font-semibold text-slate-500 mb-6">Simulated Outcome</h3>
+               <div className="flex items-center justify-around">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-slate-800 mb-1">{analysis.score}</div>
+                    <div className="text-xs text-slate-500">Risk Score</div>
+                  </div>
+                  <RiskGauge score={analysis.score} />
+                  <div className="text-center">
+                    <div className={`text-xl font-bold ${
+                       analysis.rating === 'Low' ? 'text-green-600' :
+                       analysis.rating === 'Medium' ? 'text-yellow-600' : 'text-red-600'
+                    }`}>{analysis.rating}</div>
+                    <div className="text-xs text-slate-500">Rating</div>
+                  </div>
+               </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex-1">
+                <h3 className="text-sm uppercase font-semibold text-slate-500 mb-6">Feature Contribution (SHAP)</h3>
+                <ShapChart values={analysis.shapValues} />
+            </div>
+        </div>
+     </div>
+  );
+};
+
 // --- Main App Component ---
+
 const App = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'network' | 'simulator'>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [borrower, setBorrower] = useState<BorrowerData>(DEFAULT_BORROWER);
   const [analysis, setAnalysis] = useState<RiskAnalysis>(DEFAULT_ANALYSIS);
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>(DEFAULT_GRAPH_NODES);
@@ -490,8 +832,6 @@ const App = () => {
   
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [apiKeyMissing, setApiKeyMissing] = useState(false);
-
-  // Form State for What-If
   const [formState, setFormState] = useState(DEFAULT_BORROWER);
 
   useEffect(() => {
@@ -516,7 +856,6 @@ const App = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      // Construct prompt
       const prompt = `
         You are an expert loan underwriter and risk analyst AI. 
         Analyze the following loan application data and provide a JSON response.
@@ -561,7 +900,6 @@ const App = () => {
       
       const data = JSON.parse(responseText);
 
-      // Update State
       setBorrower(formState);
       setAnalysis({
         score: data.score,
@@ -570,11 +908,9 @@ const App = () => {
         recommendations: data.recommendations
       });
       
-      // Ensure the borrower node exists and matches ID
       const nodes = data.graph.nodes;
       const links = data.graph.links;
       
-      // Basic validation to ensure graph draws
       if (nodes && links) {
         setGraphNodes(nodes);
         setGraphLinks(links);
@@ -590,369 +926,41 @@ const App = () => {
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans">
-      
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-slate-300 flex-shrink-0 hidden md:flex flex-col">
-        <div className="p-6 border-b border-slate-800">
-          <div className="flex items-center gap-2 text-blue-400 font-bold text-xl">
-            <BrainCircuitIcon className="w-8 h-8" />
-            <span>RiskAI</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">Augmented Decision Engine</p>
-        </div>
-        
-        <nav className="flex-1 p-4 space-y-2">
-          <button 
-            onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border transition-colors ${
-              activeTab === 'dashboard' 
-                ? 'bg-blue-600/10 text-blue-400 border-blue-600/20' 
-                : 'border-transparent hover:bg-slate-800'
-            }`}
-          >
-            <LayoutDashboardIcon className="w-5 h-5" />
-            <span className="font-medium">Dashboard</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab('network')}
-            className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border transition-colors ${
-              activeTab === 'network' 
-                ? 'bg-blue-600/10 text-blue-400 border-blue-600/20' 
-                : 'border-transparent hover:bg-slate-800'
-            }`}
-          >
-            <NetworkIcon className="w-5 h-5" />
-            <span className="font-medium">Network Graph</span>
-          </button>
-          
-           <button 
-             onClick={() => setActiveTab('simulator')}
-             className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border transition-colors ${
-               activeTab === 'simulator' 
-                 ? 'bg-blue-600/10 text-blue-400 border-blue-600/20' 
-                 : 'border-transparent hover:bg-slate-800'
-             }`}
-           >
-            <CalculatorIcon className="w-5 h-5" />
-            <span className="font-medium">Simulator</span>
-          </button>
-        </nav>
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
-        <div className="p-6 border-t border-slate-800">
-           <div className="flex items-center gap-3">
-             <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">JD</div>
-             <div className="text-sm">
-               <div className="text-white">John Doe</div>
-               <div className="text-xs">Loan Officer</div>
-             </div>
-           </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
       <main className="flex-1 flex flex-col max-h-screen overflow-hidden">
-        {/* Header */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0">
-          <h1 className="text-xl font-bold text-slate-800">
-            {activeTab === 'dashboard' && 'Loan Application Assessment'}
-            {activeTab === 'network' && 'Entity Relationship Analysis'}
-            {activeTab === 'simulator' && 'What-If Scenario Simulator'}
-          </h1>
-          <div className="flex items-center gap-4">
-            <span className="px-3 py-1 bg-slate-100 rounded-full text-xs font-medium text-slate-600">ID: {borrower.id}</span>
-            <span className="text-sm text-slate-500">{new Date().toLocaleDateString()}</span>
-          </div>
-        </header>
+        <Header activeTab={activeTab} borrowerId={borrower.id} />
 
-        {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-8 space-y-6">
-          
           {activeTab === 'dashboard' && (
-            <>
-              {/* Top Cards: Borrower Summary & Risk Score */}
-              <div className="grid grid-cols-12 gap-6">
-                
-                {/* Applicant Profile */}
-                <div className="col-span-12 md:col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <h3 className="text-sm uppercase font-semibold text-slate-500 mb-4">Applicant Profile</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs text-slate-400">Full Name</label>
-                      <div className="font-medium text-lg">{borrower.name}</div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-xs text-slate-400">Credit Score</label>
-                          <div className="font-medium text-slate-800">{borrower.creditScore}</div>
-                        </div>
-                        <div>
-                          <label className="text-xs text-slate-400">Age</label>
-                          <div className="font-medium text-slate-800">{borrower.age}</div>
-                        </div>
-                    </div>
-                    <div>
-                      <label className="text-xs text-slate-400">Employment</label>
-                      <div className="font-medium text-slate-800 truncate">{borrower.employmentStatus}</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Risk Score */}
-                <div className="col-span-12 md:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center justify-center relative">
-                  <h3 className="absolute top-6 left-6 text-sm uppercase font-semibold text-slate-500">Predicted Risk</h3>
-                  <RiskGauge score={analysis.score} />
-                  <div className={`mt-[-20px] px-3 py-1 rounded-full text-sm font-bold border ${
-                    analysis.rating === 'Low' ? 'bg-green-50 text-green-700 border-green-200' :
-                    analysis.rating === 'Medium' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                    'bg-red-50 text-red-700 border-red-200'
-                  }`}>
-                    {analysis.rating} Risk
-                  </div>
-                </div>
-
-                {/* Recommendations */}
-                <div className="col-span-12 md:col-span-5 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col">
-                  <h3 className="text-sm uppercase font-semibold text-slate-500 mb-4 flex items-center gap-2">
-                    <BrainCircuitIcon className="w-4 h-4" />
-                    AI Recommendations
-                  </h3>
-                  <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-                    {analysis.recommendations.map((rec, i) => (
-                      <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-100 flex gap-3">
-                        <div className="mt-1">
-                            {rec.type === 'positive' ? <CheckCircleIcon className="w-4 h-4 text-green-500" /> : <AlertTriangleIcon className="w-4 h-4 text-amber-500" />}
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-slate-800">{rec.title}</div>
-                          <div className="text-xs text-slate-500 mt-1">{rec.impact}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Middle Row: SHAP & Simulator & Graph Snippets */}
-              <div className="grid grid-cols-12 gap-6">
-                
-                {/* Explainability (SHAP) */}
-                <div className="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <div className="flex items-center justify-between mb-6">
-                      <h3 className="text-sm uppercase font-semibold text-slate-500">Key Risk Drivers</h3>
-                      <span className="text-[10px] bg-slate-100 px-2 py-1 rounded text-slate-500">Global SHAP</span>
-                  </div>
-                  <ShapChart values={analysis.shapValues} />
-                </div>
-
-                {/* Simulator (Preview Mode) */}
-                <div className="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6 border-t-4 border-t-blue-500">
-                  <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm uppercase font-semibold text-slate-500 flex items-center gap-2">
-                        <CalculatorIcon className="w-4 h-4" />
-                        Quick Simulator
-                      </h3>
-                      <button onClick={() => setActiveTab('simulator')} className="text-xs text-blue-500 hover:underline">Full View &rarr;</button>
-                  </div>
-                  <div className="space-y-4">
-                      {/* Simplified Controls for Dashboard */}
-                      <div>
-                        <label className="flex justify-between text-xs font-medium text-slate-700 mb-1">
-                            <span>Loan Amount</span>
-                            <span>${formState.loanAmount.toLocaleString()}</span>
-                        </label>
-                        <input 
-                            type="range" name="loanAmount" min="5000" max="100000" step="1000" 
-                            value={formState.loanAmount} onChange={handleInputChange}
-                            className="w-full accent-blue-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" 
-                          />
-                      </div>
-                      <div className="text-xs text-center text-slate-400">Use Simulator tab for advanced controls</div>
-                      <button 
-                        onClick={runAnalysis}
-                        disabled={isAnalyzing || apiKeyMissing}
-                        className={`w-full py-2 mt-2 rounded-lg flex items-center justify-center gap-2 font-semibold text-sm transition-all
-                          ${isAnalyzing ? 'bg-slate-100 text-slate-400' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md'}
-                        `}
-                      >
-                        {isAnalyzing ? "Analyzing..." : "Update Score"}
-                      </button>
-                  </div>
-                </div>
-
-                {/* Network Graph (Preview Mode) */}
-                <div className="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col">
-                  <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm uppercase font-semibold text-slate-500 flex items-center gap-2">
-                        <NetworkIcon className="w-4 h-4" />
-                        Network Preview
-                      </h3>
-                       <button onClick={() => setActiveTab('network')} className="text-xs text-blue-500 hover:underline">Full View &rarr;</button>
-                  </div>
-                  <div className="flex-1 min-h-[200px] relative">
-                      <NetworkGraph nodes={graphNodes} links={graphLinks} />
-                  </div>
-                </div>
-                
-              </div>
-            </>
+            <DashboardView 
+              borrower={borrower}
+              analysis={analysis}
+              formState={formState}
+              handleInputChange={handleInputChange}
+              runAnalysis={runAnalysis}
+              isAnalyzing={isAnalyzing}
+              apiKeyMissing={apiKeyMissing}
+              graphNodes={graphNodes}
+              graphLinks={graphLinks}
+              onNavigate={setActiveTab}
+            />
           )}
 
           {activeTab === 'network' && (
-            <div className="h-full flex flex-col">
-               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex-1 flex flex-col">
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <NetworkIcon className="w-5 h-5 text-blue-500" />
-                        Borrower Relationship Graph
-                      </h2>
-                      <p className="text-sm text-slate-500">Analyzing 1st and 2nd degree connections for contagion risk.</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <span className="flex items-center gap-1 text-xs text-slate-500"><div className="w-2 h-2 rounded-full bg-blue-500"></div>Borrower</span>
-                      <span className="flex items-center gap-1 text-xs text-slate-500"><div className="w-2 h-2 rounded-full bg-green-500"></div>Guarantor</span>
-                      <span className="flex items-center gap-1 text-xs text-slate-500"><div className="w-2 h-2 rounded-full bg-indigo-500"></div>Employer</span>
-                    </div>
-                  </div>
-                  <div className="flex-1 border border-slate-100 rounded-lg bg-slate-50 p-4">
-                    <NetworkGraph nodes={graphNodes} links={graphLinks} />
-                  </div>
-               </div>
-            </div>
+            <NetworkView nodes={graphNodes} links={graphLinks} />
           )}
 
           {activeTab === 'simulator' && (
-             <div className="grid grid-cols-12 gap-6 h-full">
-                {/* Controls */}
-                <div className="col-span-12 lg:col-span-4 bg-white rounded-xl shadow-sm border border-slate-200 p-6 overflow-y-auto">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                      <CalculatorIcon className="w-5 h-5 text-blue-500" />
-                      Scenario Controls
-                    </h3>
-                    
-                    <div className="space-y-6">
-                      <div>
-                        <label className="flex justify-between text-sm font-medium text-slate-700 mb-2">
-                            <span>Loan Amount</span>
-                            <span className="text-blue-600 font-bold">${formState.loanAmount.toLocaleString()}</span>
-                        </label>
-                        <input 
-                            type="range" name="loanAmount" min="5000" max="100000" step="1000" 
-                            value={formState.loanAmount} onChange={handleInputChange}
-                            className="w-full accent-blue-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" 
-                          />
-                        <div className="flex justify-between text-xs text-slate-400 mt-1">
-                          <span>$5k</span>
-                          <span>$100k</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="flex justify-between text-sm font-medium text-slate-700 mb-2">
-                            <span>Annual Income</span>
-                            <span className="text-blue-600 font-bold">${formState.income.toLocaleString()}</span>
-                        </label>
-                        <input 
-                            type="range" name="income" min="20000" max="200000" step="5000" 
-                            value={formState.income} onChange={handleInputChange}
-                            className="w-full accent-blue-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" 
-                          />
-                      </div>
-
-                        <div>
-                        <label className="flex justify-between text-sm font-medium text-slate-700 mb-2">
-                            <span>Credit Score</span>
-                            <span className="text-blue-600 font-bold">{formState.creditScore}</span>
-                        </label>
-                        <input 
-                            type="range" name="creditScore" min="300" max="850" step="10" 
-                            value={formState.creditScore} onChange={handleInputChange}
-                            className="w-full accent-blue-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" 
-                          />
-                        <div className="flex justify-between text-xs text-slate-400 mt-1">
-                          <span>Poor (300)</span>
-                          <span>Excellent (850)</span>
-                        </div>
-                      </div>
-
-                        <div className="space-y-4 pt-4 border-t border-slate-100">
-                          <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Loan Term</label>
-                            <div className="grid grid-cols-3 gap-2">
-                              {[12, 24, 36, 48, 60].map(term => (
-                                <button
-                                  key={term}
-                                  onClick={() => handleInputChange({ target: { name: 'loanTerm', value: term } } as any)}
-                                  className={`px-3 py-2 text-sm rounded border ${
-                                    formState.loanTerm === term 
-                                    ? 'bg-blue-600 text-white border-blue-600' 
-                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                                  }`}
-                                >
-                                  {term} Mo
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Employment</label>
-                            <input 
-                              type="text" 
-                              name="employmentStatus" 
-                              value={formState.employmentStatus}
-                              onChange={handleInputChange}
-                              className="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded text-slate-800 focus:outline-none focus:border-blue-500"
-                            />
-                          </div>
-                        </div>
-
-                        <button 
-                          onClick={runAnalysis}
-                          disabled={isAnalyzing || apiKeyMissing}
-                          className={`w-full py-4 mt-4 rounded-xl flex items-center justify-center gap-2 font-bold text-lg transition-all shadow-lg
-                            ${isAnalyzing ? 'bg-slate-100 text-slate-400' : 'bg-blue-600 hover:bg-blue-700 text-white hover:scale-[1.02]'}
-                          `}
-                        >
-                          {isAnalyzing ? (
-                            <><RefreshCwIcon className="w-5 h-5 animate-spin" /> Simulating...</>
-                          ) : (
-                            <><BrainCircuitIcon className="w-5 h-5" /> Run Simulation</>
-                          )}
-                        </button>
-                    </div>
-                </div>
-
-                {/* Results Preview */}
-                <div className="col-span-12 lg:col-span-8 space-y-6">
-                    {/* Simulated Score */}
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                       <h3 className="text-sm uppercase font-semibold text-slate-500 mb-6">Simulated Outcome</h3>
-                       <div className="flex items-center justify-around">
-                          <div className="text-center">
-                            <div className="text-3xl font-bold text-slate-800 mb-1">{analysis.score}</div>
-                            <div className="text-xs text-slate-500">Risk Score</div>
-                          </div>
-                          <RiskGauge score={analysis.score} />
-                          <div className="text-center">
-                            <div className={`text-xl font-bold ${
-                               analysis.rating === 'Low' ? 'text-green-600' :
-                               analysis.rating === 'Medium' ? 'text-yellow-600' : 'text-red-600'
-                            }`}>{analysis.rating}</div>
-                            <div className="text-xs text-slate-500">Rating</div>
-                          </div>
-                       </div>
-                    </div>
-
-                    {/* Comparative SHAP */}
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex-1">
-                        <h3 className="text-sm uppercase font-semibold text-slate-500 mb-6">Feature Contribution (SHAP)</h3>
-                        <ShapChart values={analysis.shapValues} />
-                    </div>
-                </div>
-             </div>
+             <SimulatorView 
+                formState={formState}
+                handleInputChange={handleInputChange}
+                runAnalysis={runAnalysis}
+                isAnalyzing={isAnalyzing}
+                apiKeyMissing={apiKeyMissing}
+                analysis={analysis}
+             />
           )}
-
         </div>
       </main>
     </div>
